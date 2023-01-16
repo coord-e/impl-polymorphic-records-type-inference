@@ -1,8 +1,17 @@
 module Main where
 
-import qualified MyLib (someFunc)
+import App
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Text.IO as Text (readFile)
+import System.Environment (getArgs)
+
+typeFile :: FilePath -> App ()
+typeFile file = do
+  content <- liftIO $ Text.readFile file
+  expr <- parseExpr content
+  liftIO . putStr $ show expr
 
 main :: IO ()
 main = do
-  putStrLn "Hello, Haskell!"
-  MyLib.someFunc
+  [path] <- getArgs
+  runApp $ typeFile path

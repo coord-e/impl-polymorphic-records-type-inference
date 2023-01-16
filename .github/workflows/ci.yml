@@ -1,0 +1,32 @@
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: haskell/actions/setup@v2
+        with:
+          ghc-version: '9.2.5'
+          cabal-version: '3.6'
+      - run: cabal new-test --test-show-details=streaming
+  hlint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: haskell/actions/hlint-setup@v2
+      - run: hlint --git
+  ormolu:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mrkkrp/ormolu-action@v9
+  cabal-fmt:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: haskell/actions/setup@v2
+        with:
+          cabal-version: '3.6'
+      - run: cabal format
+      - run: git diff --exit-code
