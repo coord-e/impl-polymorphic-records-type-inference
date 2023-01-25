@@ -18,7 +18,7 @@ import qualified Data.Vector as Vector (fromList, zip)
 import Fresh (Fresh (..))
 import Language.Simple.Syntax (Expr (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
 import Language.Simple.Type.Constraint (Constraint (..), UniVar, fuv)
-import Language.Simple.Type.Env (HasTypeEnv (..), TermVarType (..), runEnvT, withLocalVar)
+import Language.Simple.Type.Env (HasTypeEnv (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Unifier)
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, fromBinders, lookup, singleton, substitute)
@@ -29,10 +29,8 @@ generateConstraints (CtorExpr k) = do
   s <- lookupDataCtor k `orThrowM` UnboundDataCtor k
   instantiateTypeScheme s
 generateConstraints (VarExpr x) = do
-  q <- lookupTermVar x `orThrowM` UnboundTermVar x
-  case q of
-    TypeScheme s -> instantiateTypeScheme s
-    Monotype t -> pure t
+  s <- lookupTermVar x `orThrowM` UnboundTermVar x
+  instantiateTypeScheme s
 generateConstraints (LambdaExpr x e) = do
   a <- UniType <$> fresh
   t <- withLocalVar x a $ generateConstraints e
@@ -47,7 +45,7 @@ generateConstraints (LetExpr x e1 e2) = do
   (t1, cs) <- runWriterT $ generateConstraints e1
   u <- solveConstraints cs
   s <- generalize $ Subst.substitute u t1
-  t2 <- withTermVar x (TypeScheme s) $ generateConstraints e2
+  t2 <- withTermVar x s $ generateConstraints e2
   pure t2
 
 generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
