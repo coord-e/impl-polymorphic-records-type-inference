@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.Simple.Syntax
   ( -- * Expressions
@@ -20,10 +21,11 @@ module Language.Simple.Syntax
 where
 
 import Data.Hashable (Hashable)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector (fromList)
 import Data.Void (Void)
+import Fresh (GenFresh (..))
 import GHC.Generics (Generic)
 
 -- | Expression.
@@ -53,12 +55,12 @@ data DataCtor
   deriving stock (Show, Ord, Eq, Generic)
   deriving anyclass (Hashable)
 
--- | Type scheme.
-data TypeScheme = ForallTypeScheme
+-- | Type scheme that contains unification variable as @a@.
+data TypeScheme a = ForallTypeScheme
   { -- | Type variables to be quantified.
     vars :: Vector TypeVar,
     -- | The type.
-    monotype :: RigidMonotype
+    monotype :: Monotype a
   }
   deriving (Generic)
 
@@ -89,3 +91,6 @@ newtype TypeVar = TypeVar Text
   deriving stock (Ord, Eq, Generic)
   deriving newtype (Show)
   deriving anyclass (Hashable)
+
+instance GenFresh TypeVar where
+  fromFreshNatural n = TypeVar $ "a" <> (pack $ show n)

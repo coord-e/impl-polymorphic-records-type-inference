@@ -10,16 +10,14 @@ where
 
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, logInfoN)
-import Control.Monad.Writer.Class (MonadWriter (..))
+import Control.Monad.Writer (MonadWriter (..), runWriterT)
 import Data.Foldable (foldrM)
-import Data.HashSet (HashSet)
-import qualified Data.HashSet as HashSet (member, singleton)
+import qualified Data.HashSet as HashSet (difference, member)
 import Data.Text (pack)
-import qualified Data.Vector as Vector (zip)
-import Data.Void (absurd)
+import qualified Data.Vector as Vector (fromList, zip)
 import Fresh (Fresh (..))
-import Language.Simple.Syntax (Expr (..), Monotype (..), RigidMonotype, TypeScheme (..), TypeVar, functionType)
-import Language.Simple.Type.Constraint (Constraint (..), UniVar)
+import Language.Simple.Syntax (Expr (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
+import Language.Simple.Type.Constraint (Constraint (..), UniVar, fuv)
 import Language.Simple.Type.Env (HasTypeEnv (..), TermVarType (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Unifier)
@@ -46,32 +44,40 @@ generateConstraints (ApplyExpr e1 e2) = do
   tell $ [EqualityConstraint t1 (functionType t2 a)]
   pure a
 generateConstraints (LetExpr x e1 e2) = do
-  t1 <- generateConstraints e1
-  t2 <- withLocalVar x t1 $ generateConstraints e2
+  (t1, cs) <- runWriterT $ generateConstraints e1
+  u <- solveConstraints cs
+  s <- generalize $ Subst.substitute u t1
+  t2 <- withTermVar x (TypeScheme s) $ generateConstraints e2
   pure t2
+
+generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
+generalize t = do
+  as <- HashSet.difference (fuv t) <$> envFuv
+  (s, vs) <- foldrM go (Subst.empty, []) as
+  pure ForallTypeScheme {vars = Vector.fromList vs, monotype = Subst.substitute s t}
+  where
+    go a (s, vs) = do
+      v <- fresh
+      let s' = Subst.singleton a (VarType v)
+      pure (Subst.compose s s', v : vs)
 
 type Instantiator = Subst TypeVar
 
-instantiateMonotype :: (MonadError TypeError m) => Instantiator -> RigidMonotype -> m (Monotype UniVar)
+instantiateMonotype :: (MonadError TypeError m) => Instantiator -> Monotype UniVar -> m (Monotype UniVar)
 instantiateMonotype s (VarType v) = Subst.lookup v s `orThrow` UnboundTypeVar v
 instantiateMonotype s (ApplyType k ts) = ApplyType k <$> traverse (instantiateMonotype s) ts
-instantiateMonotype _ (UniType v) = absurd v
+instantiateMonotype _ (UniType v) = pure $ UniType v
 
 instantiateTypeScheme ::
   ( Fresh m,
     MonadError TypeError m
   ) =>
-  TypeScheme ->
+  TypeScheme UniVar ->
   m (Monotype UniVar)
 instantiateTypeScheme ForallTypeScheme {vars, monotype} = do
   s <- Subst.fromBinders vars
   t <- instantiateMonotype s monotype
   pure t
-
-fuv :: Monotype UniVar -> HashSet UniVar
-fuv (VarType _) = mempty
-fuv (ApplyType _ ts) = foldMap fuv ts
-fuv (UniType u) = HashSet.singleton u
 
 solveConstraints :: (MonadError TypeError m, MonadLogger m) => [Constraint] -> m Unifier
 solveConstraints = foldrM go Subst.empty
@@ -89,15 +95,13 @@ solveConstraints = foldrM go Subst.empty
     unifyVar u t
       | HashSet.member u (fuv t) = throwError $ OccurCheck (UniType u) t
       | otherwise = pure $ Subst.singleton u t
-    unifyAll xs ys = foldrM go2 Subst.empty (Vector.zip xs ys)
+    unifyAll xs ys = foldrM go Subst.empty . fmap f $ Vector.zip xs ys
       where
-        go2 (x, y) s1 = do
-          s2 <- unify (Subst.substitute s1 x) (Subst.substitute s1 y)
-          pure $ Subst.compose s2 s1
+        f (x, y) = EqualityConstraint x y
 
 typeExpr :: (MonadError TypeError m, MonadLogger m) => Expr -> m ()
 typeExpr e = do
-  (t, cs) <- runEnvT mempty $ generateConstraints e
+  (t, cs) <- runEnvT mempty . runWriterT $ generateConstraints e
   s <- solveConstraints cs
   logInfoN . pack . show $ Subst.substitute s t
   pure ()
