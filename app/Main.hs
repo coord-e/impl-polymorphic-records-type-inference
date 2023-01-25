@@ -9,7 +9,8 @@ typeFile :: FilePath -> App ()
 typeFile file = do
   content <- liftIO $ Text.readFile file
   expr <- parseExpr content
-  liftIO . putStr $ show expr
+  liftIO . putStrLn $ show expr
+  typeExpr expr
 
 main :: IO ()
 main = do

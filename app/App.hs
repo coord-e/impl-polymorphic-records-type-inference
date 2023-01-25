@@ -5,6 +5,7 @@ module App
   ( App,
     runApp,
     parseExpr,
+    typeExpr,
   )
 where
 
@@ -14,6 +15,7 @@ import Control.Monad.Logger (LoggingT, MonadLogger, logErrorN, runStdoutLoggingT
 import Data.Text (Text, pack)
 import qualified Language.Simple.Parser as Parser (errorMessage, parseExpr)
 import Language.Simple.Syntax (Expr)
+import qualified Language.Simple.Type as Type (typeExpr)
 import System.Exit (exitFailure)
 
 newtype App a = App (ExceptT String (LoggingT IO) a)
@@ -21,6 +23,9 @@ newtype App a = App (ExceptT String (LoggingT IO) a)
 
 parseExpr :: Text -> App Expr
 parseExpr = App . withExceptT Parser.errorMessage . Parser.parseExpr
+
+typeExpr :: Expr -> App ()
+typeExpr = App . withExceptT show . Type.typeExpr
 
 runApp :: App a -> IO a
 runApp (App a) = runStdoutLoggingT $ do

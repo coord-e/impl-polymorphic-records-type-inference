@@ -8,11 +8,22 @@ module Language.Simple.Syntax
     Expr (..),
     TermVar (..),
     DataCtor (..),
+
+    -- * Types
+    TypeScheme (..),
+    Monotype (..),
+    RigidMonotype,
+    functionType,
+    TypeVar (..),
+    TypeCtor (..),
   )
 where
 
 import Data.Hashable (Hashable)
 import Data.Text (Text)
+import Data.Vector (Vector)
+import qualified Data.Vector as Vector (fromList)
+import Data.Void (Void)
 import GHC.Generics (Generic)
 
 -- | Expression.
@@ -40,4 +51,41 @@ data DataCtor
   = NamedDataCtor Text
   | IntegerDataCtor Integer
   deriving stock (Show, Ord, Eq, Generic)
+  deriving anyclass (Hashable)
+
+-- | Type scheme.
+data TypeScheme = ForallTypeScheme
+  { -- | Type variables to be quantified.
+    vars :: Vector TypeVar,
+    -- | The type.
+    monotype :: RigidMonotype
+  }
+  deriving (Generic)
+
+-- | Monotype that contains unification variable as @a@.
+data Monotype a
+  = -- | Rigid type variable. \( a \)
+    VarType TypeVar
+  | -- | Type constructor application. \( T \bar{\tau} \)
+    ApplyType TypeCtor (Vector (Monotype a))
+  | -- | Unification type variable. \( \alpha \)
+    UniType a
+  deriving (Generic, Show)
+
+type RigidMonotype = Monotype Void
+
+functionType :: Monotype a -> Monotype a -> Monotype a
+functionType a b = ApplyType FunctionTypeCtor $ Vector.fromList [a, b]
+
+-- | Type constructor.
+data TypeCtor
+  = NamedTypeCtor Text
+  | FunctionTypeCtor
+  deriving stock (Show, Ord, Eq, Generic)
+  deriving anyclass (Hashable)
+
+-- | Type-level variable.
+newtype TypeVar = TypeVar Text
+  deriving stock (Ord, Eq, Generic)
+  deriving newtype (Show)
   deriving anyclass (Hashable)
