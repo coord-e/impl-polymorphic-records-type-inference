@@ -47,7 +47,7 @@ library
         transformers ^>=0.5.6.2,
         vector ^>=0.13.0.0,
         unordered-containers ^>=0.2.19.1,
-        monad-logger ^>=0.3.37,
+        monad-logger ^>=0.3.37
 
 executable simple-records
     main-is:          Main.hs

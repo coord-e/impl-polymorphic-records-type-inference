@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -15,7 +14,7 @@ where
 
 import Control.Monad.Except (MonadError)
 import Control.Monad.Logger (MonadLogger)
-import Control.Monad.Reader (ReaderT (..), ask, asks, local, runReaderT)
+import Control.Monad.Reader (ReaderT (..), asks, local, runReaderT)
 import Control.Monad.State (StateT (..), evalStateT, state)
 import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT (..), mapWriterT)
@@ -36,7 +35,7 @@ class Monad m => HasTypeEnv m where
 withLocalVar :: HasTypeEnv m => TermVar -> Monotype UniVar -> m a -> m a
 withLocalVar v t = withTermVar v ForallTypeScheme {vars = mempty, monotype = t}
 
-data Env = Env
+newtype Env = Env
   { termVars :: HashMap TermVar (TypeScheme UniVar)
   }
 
@@ -51,12 +50,12 @@ instance Monad m => HasTypeEnv (EnvT m) where
   lookupDataCtor (NamedDataCtor "True") = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Bool") mempty}
   lookupDataCtor (NamedDataCtor "False") = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Bool") mempty}
   lookupDataCtor (IntegerDataCtor _) = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Int") mempty}
-  lookupDataCtor _ = pure $ Nothing
-  envFuv = MkEnvT $ foldMap (fuv . monotype) . termVars <$> ask
+  lookupDataCtor _ = pure Nothing
+  envFuv = MkEnvT $ asks (foldMap (fuv . monotype) . termVars)
 
 instance (Monoid w, HasTypeEnv m) => HasTypeEnv (WriterT w m) where
   lookupTermVar x = lift $ lookupTermVar x
-  withTermVar x s m = mapWriterT (withTermVar x s) m
+  withTermVar x s = mapWriterT (withTermVar x s)
   lookupDataCtor x = lift $ lookupDataCtor x
   envFuv = lift envFuv
 

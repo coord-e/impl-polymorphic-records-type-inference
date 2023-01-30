@@ -93,4 +93,4 @@ newtype TypeVar = TypeVar Text
   deriving anyclass (Hashable)
 
 instance GenFresh TypeVar where
-  fromFreshNatural n = TypeVar $ "a" <> (pack $ show n)
+  fromFreshNatural n = TypeVar $ "a" <> pack (show n)

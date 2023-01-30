@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
@@ -39,14 +38,13 @@ generateConstraints (ApplyExpr e1 e2) = do
   t1 <- generateConstraints e1
   t2 <- generateConstraints e2
   a <- UniType <$> fresh
-  tell $ [EqualityConstraint t1 (functionType t2 a)]
+  tell [EqualityConstraint t1 (functionType t2 a)]
   pure a
 generateConstraints (LetExpr x e1 e2) = do
   (t1, cs) <- runWriterT $ generateConstraints e1
   u <- solveConstraints cs
   s <- generalize $ Subst.substitute u t1
-  t2 <- withTermVar x s $ generateConstraints e2
-  pure t2
+  withTermVar x s $ generateConstraints e2
 
 generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
 generalize t = do
@@ -74,8 +72,7 @@ instantiateTypeScheme ::
   m (Monotype UniVar)
 instantiateTypeScheme ForallTypeScheme {vars, monotype} = do
   s <- Subst.fromBinders vars
-  t <- instantiateMonotype s monotype
-  pure t
+  instantiateMonotype s monotype
 
 solveConstraints :: (MonadError TypeError m, MonadLogger m) => [Constraint] -> m Unifier
 solveConstraints = foldrM go Subst.empty
