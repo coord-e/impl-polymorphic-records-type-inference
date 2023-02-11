@@ -33,4 +33,5 @@ instance Pretty UniVar where
 fuv :: Monotype UniVar -> HashSet UniVar
 fuv (VarType _) = mempty
 fuv (ApplyType _ ts) = foldMap fuv ts
+fuv (RecordType fs) = foldMap fuv fs
 fuv (UniType u) = HashSet.singleton u
