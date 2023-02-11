@@ -24,6 +24,8 @@ import Data.HashSet (HashSet)
 import Fresh (Fresh (..), GenFresh (..))
 import Language.Simple.Syntax (DataCtor (..), Monotype (..), TermVar, TypeCtor (..), TypeScheme (..))
 import Language.Simple.Type.Constraint (UniVar, fuv)
+import Language.Simple.Type.Subst (Unifier)
+import qualified Language.Simple.Type.Subst as Subst (substitute)
 import Numeric.Natural (Natural)
 
 class Monad m => HasTypeEnv m where
@@ -31,6 +33,7 @@ class Monad m => HasTypeEnv m where
   withTermVar :: TermVar -> TypeScheme UniVar -> m a -> m a
   lookupDataCtor :: DataCtor -> m (Maybe (TypeScheme UniVar))
   envFuv :: m (HashSet UniVar)
+  withUnifier :: Unifier -> m a -> m a
 
 withLocalVar :: HasTypeEnv m => TermVar -> Monotype UniVar -> m a -> m a
 withLocalVar v t = withTermVar v ForallTypeScheme {vars = mempty, monotype = t}
@@ -52,12 +55,16 @@ instance Monad m => HasTypeEnv (EnvT m) where
   lookupDataCtor (IntegerDataCtor _) = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Int") mempty}
   lookupDataCtor _ = pure Nothing
   envFuv = MkEnvT $ asks (foldMap (fuv . monotype) . termVars)
+  withUnifier u (MkEnvT a) = MkEnvT $ local f a
+    where
+      f e@Env {termVars} = e {termVars = fmap (Subst.substitute u) termVars}
 
 instance (Monoid w, HasTypeEnv m) => HasTypeEnv (WriterT w m) where
   lookupTermVar x = lift $ lookupTermVar x
   withTermVar x s = mapWriterT (withTermVar x s)
   lookupDataCtor x = lift $ lookupDataCtor x
   envFuv = lift envFuv
+  withUnifier u = mapWriterT (withUnifier u)
 
 instance Monad m => Fresh (EnvT m) where
   fresh = MkEnvT $ state f

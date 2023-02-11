@@ -9,7 +9,7 @@ where
 
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, logInfoN)
-import Control.Monad.Writer (MonadWriter (..), runWriterT)
+import Control.Monad.Writer (MonadWriter (..), listen, runWriterT)
 import Data.Foldable (foldrM)
 import qualified Data.HashSet as HashSet (difference, member)
 import Data.Text (pack)
@@ -41,9 +41,9 @@ generateConstraints (ApplyExpr e1 e2) = do
   tell [EqualityConstraint t1 (functionType t2 a)]
   pure a
 generateConstraints (LetExpr x e1 e2) = do
-  (t1, cs) <- runWriterT $ generateConstraints e1
+  (t1, cs) <- listen $ generateConstraints e1
   u <- solveConstraints cs
-  s <- generalize $ Subst.substitute u t1
+  s <- withUnifier u $ generalize (Subst.substitute u t1)
   withTermVar x s $ generateConstraints e2
 
 generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)

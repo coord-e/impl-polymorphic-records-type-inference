@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Language.Simple.Type.Subst
   ( Subst (..),
@@ -35,7 +36,7 @@ import Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet (toMap)
 import Data.Hashable (Hashable)
 import Fresh (Fresh (..))
-import Language.Simple.Syntax (Monotype (..), TypeVar)
+import Language.Simple.Syntax (Monotype (..), TypeScheme (..), TypeVar)
 import Language.Simple.Type.Constraint (UniVar)
 import Util (fromJustOr)
 import Prelude hiding (lookup, null)
@@ -82,6 +83,9 @@ instance Substitutable UniVar (Monotype UniVar) where
   substitute _ (VarType v) = VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
   substitute (Subst s) (UniType u) = HashMap.lookup u s `fromJustOr` UniType u
+
+instance Substitutable UniVar (TypeScheme UniVar) where
+  substitute s ForallTypeScheme {vars, monotype} = ForallTypeScheme {vars, monotype = substitute s monotype}
 
 instance Substitutable TypeVar (Monotype UniVar) where
   substitute (Subst s) (VarType v) = HashMap.lookup v s `fromJustOr` VarType v
