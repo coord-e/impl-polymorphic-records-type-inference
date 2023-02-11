@@ -1,0 +1,5 @@
+let g =
+  \x.
+    let f = \y. x y
+    in f 1
+in g (\x. x)

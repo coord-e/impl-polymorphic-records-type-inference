@@ -1,0 +1,7 @@
+let left = \x. \y. x
+in
+let g =
+  \x.
+    let f = \y. x y // f should not be polymorphic
+    in left (f 1) (f True)
+in g (\x. x)
