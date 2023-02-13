@@ -23,9 +23,9 @@ import qualified Data.HashMap.Strict as HashMap (insert, lookup)
 import Data.HashSet (HashSet)
 import Fresh (Fresh (..), GenFresh (..))
 import Language.Simple.Syntax (DataCtor (..), Monotype (..), TermVar, TypeCtor (..), TypeScheme (..))
-import Language.Simple.Type.Constraint (UniVar, fuv)
 import Language.Simple.Type.Subst (Unifier)
 import qualified Language.Simple.Type.Subst as Subst (substitute)
+import Language.Simple.Type.UniVar (UniVar, fuv)
 import Numeric.Natural (Natural)
 
 class Monad m => HasTypeEnv m where

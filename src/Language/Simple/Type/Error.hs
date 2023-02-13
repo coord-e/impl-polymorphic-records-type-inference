@@ -7,7 +7,7 @@ where
 
 import GHC.Generics (Generic)
 import Language.Simple.Syntax (DataCtor, Monotype, TermVar, TypeVar)
-import Language.Simple.Type.Constraint (UniVar)
+import Language.Simple.Type.UniVar (UniVar)
 
 data TypeError
   = UnboundTermVar TermVar
