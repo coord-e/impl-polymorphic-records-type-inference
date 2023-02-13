@@ -90,6 +90,7 @@ class Substitutable a b where
 instance Substitutable UniVar (Monotype UniVar) where
   substitute _ (VarType v) = VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
+  substitute s (RecordType fs) = RecordType $ fmap (substitute s) fs
   substitute (Subst s) (UniType u) = HashMap.lookup u s `fromJustOr` UniType u
 
 instance Substitutable UniVar (TypeScheme UniVar) where
@@ -98,6 +99,7 @@ instance Substitutable UniVar (TypeScheme UniVar) where
 instance Substitutable TypeVar (Monotype UniVar) where
   substitute (Subst s) (VarType v) = HashMap.lookup v s `fromJustOr` VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
+  substitute s (RecordType fs) = RecordType $ fmap (substitute s) fs
   substitute _ (UniType v) = UniType v
 
 fromBinders :: (Eq a, Hashable a, Fresh m, Foldable f) => f a -> m (Subst a)

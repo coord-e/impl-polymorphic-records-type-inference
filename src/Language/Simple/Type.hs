@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Simple.Type
   ( typeExpr,
@@ -15,7 +16,7 @@ import Data.Foldable (foldrM)
 import qualified Data.HashSet as HashSet (difference, member)
 import qualified Data.Vector as Vector (fromList, zip)
 import Fresh (Fresh (..))
-import Language.Simple.Syntax (Expr (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
+import Language.Simple.Syntax (Expr (..), Kind (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
 import Language.Simple.Type.Constraint (Constraint (..))
 import Language.Simple.Type.Env (HasTypeEnv (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
@@ -47,12 +48,16 @@ generateConstraints (LetExpr x e1 e2) = do
   s <- withUnifier u $ generalize (Subst.substitute u t1)
   logInfoN $ showPretty x <> " :: " <> showPretty s
   withTermVar x s $ generateConstraints e2
+generateConstraints (RecordExpr _) = error "unimplemented"
+generateConstraints (UpdateExpr _ _) = error "unimplemented"
+generateConstraints (MemberExpr _ _) = error "unimplemented"
 
 generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
 generalize t = do
   as <- HashSet.difference (fuv t) <$> envFuv
   (s, vs) <- foldrM go (Subst.empty, []) as
-  pure ForallTypeScheme {vars = Vector.fromList vs, monotype = Subst.substitute s t}
+  let vs' = fmap (,TypeKind) vs -- TODO: use kinds
+  pure ForallTypeScheme {vars = Vector.fromList vs', monotype = Subst.substitute s t}
   where
     go a (s, vs) = do
       v <- fresh
@@ -64,6 +69,7 @@ type Instantiator = Subst TypeVar
 instantiateMonotype :: (MonadError TypeError m) => Instantiator -> Monotype UniVar -> m (Monotype UniVar)
 instantiateMonotype s (VarType v) = Subst.lookup v s `orThrow` UnboundTypeVar v
 instantiateMonotype s (ApplyType k ts) = ApplyType k <$> traverse (instantiateMonotype s) ts
+instantiateMonotype s (RecordType fs) = RecordType <$> traverse (instantiateMonotype s) fs
 instantiateMonotype _ (UniType v) = pure $ UniType v
 
 instantiateTypeScheme ::
@@ -73,7 +79,7 @@ instantiateTypeScheme ::
   TypeScheme UniVar ->
   m (Monotype UniVar)
 instantiateTypeScheme ForallTypeScheme {vars, monotype} = do
-  s <- Subst.fromBinders vars
+  s <- Subst.fromBinders $ fmap fst vars -- TODO: use kinds
   instantiateMonotype s monotype
 
 solveConstraints :: (MonadError TypeError m, MonadLogger m) => [Constraint] -> m Unifier
