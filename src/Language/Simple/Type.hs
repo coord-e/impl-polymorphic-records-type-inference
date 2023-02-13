@@ -55,7 +55,7 @@ generateConstraints (ApplyExpr e1 e2) = do
 generateConstraints (LetExpr x e1 e2) = do
   (t1, cs) <- listen $ generateConstraints e1
   u <- solveConstraints cs
-  s <- withUnifier u $ generalize (Subst.substitute u t1)
+  s <- withSubst u $ generalize (Subst.substitute u t1)
   logInfoN $ showPretty x <> " :: " <> showPretty s
   withTermVar x s $ generateConstraints e2
 generateConstraints (RecordExpr fs) = do

@@ -34,7 +34,7 @@ import Language.Simple.Syntax
     TypeScheme (..),
   )
 import Language.Simple.Type.Error (TypeException (..))
-import Language.Simple.Type.Subst (Subst, Substitutable, Unifier)
+import Language.Simple.Type.Subst (Subst, Substitutable)
 import qualified Language.Simple.Type.Subst as Subst (substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
 
@@ -43,7 +43,7 @@ class Monad m => HasTypeEnv m where
   withTermVar :: TermVar -> TypeScheme UniVar -> m a -> m a
   lookupDataCtor :: DataCtor -> m (Maybe (TypeScheme UniVar))
   envFuv :: m (HashSet UniVar)
-  withUnifier :: Unifier -> m a -> m a
+  withSubst :: Substitutable a (TypeScheme UniVar) => Subst a -> m b -> m b
 
 withLocalVar :: HasTypeEnv m => TermVar -> Monotype UniVar -> m a -> m a
 withLocalVar v t = withTermVar v ForallTypeScheme {vars = mempty, monotype = t}
@@ -75,7 +75,7 @@ instance Monad m => HasTypeEnv (EnvT m) where
   lookupDataCtor (IntegerDataCtor _) = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Int") mempty}
   lookupDataCtor _ = pure Nothing
   envFuv = MkEnvT $ asks (foldMap (fuv . monotype) . termVars)
-  withUnifier u (MkEnvT a) = MkEnvT $ local f a
+  withSubst u (MkEnvT a) = MkEnvT $ local f a
     where
       f e@TypeEnv {termVars} = e {termVars = fmap (Subst.substitute u) termVars}
 
@@ -84,7 +84,7 @@ instance (Monoid w, HasTypeEnv m) => HasTypeEnv (WriterT w m) where
   withTermVar x s = mapWriterT (withTermVar x s)
   lookupDataCtor x = lift $ lookupDataCtor x
   envFuv = lift envFuv
-  withUnifier u = mapWriterT (withUnifier u)
+  withSubst u = mapWriterT (withSubst u)
 
 instance (Fresh m, Monad m) => HasKindEnv (EnvT m) where
   getUniVarKind u = MkEnvT . gets $ f . HashMap.lookup u . uniVars

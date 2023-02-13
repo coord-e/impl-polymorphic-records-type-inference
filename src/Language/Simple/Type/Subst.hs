@@ -14,7 +14,6 @@ module Language.Simple.Type.Subst
     empty,
     member,
     singleton,
-    Unifier,
     Substitutable (..),
   )
 where
@@ -46,8 +45,6 @@ instance Pretty a => Pretty (Subst a) where
   pretty (Subst m) = list . map f $ HashMap.toList m
     where
       f (k, v) = pretty k <+> "↦" <+> pretty v
-
-type Unifier = Subst UniVar
 
 empty :: Subst a
 empty = Subst HashMap.empty

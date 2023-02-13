@@ -25,7 +25,7 @@ import GHC.Generics (Generic)
 import Language.Simple.Syntax (Kind (..), Monotype (..))
 import Language.Simple.Type.Env (HasKindEnv (..))
 import Language.Simple.Type.Error (TypeError (..))
-import Language.Simple.Type.Subst (Substitutable (..), Unifier)
+import Language.Simple.Type.Subst (Subst, Substitutable (..))
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, singleton, substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
 import Prettyprinter (Pretty (..), (<+>))
@@ -46,7 +46,7 @@ solveConstraints ::
     HasKindEnv m
   ) =>
   [Constraint] ->
-  m Unifier
+  m (Subst UniVar)
 solveConstraints cs = execStateT (go cs) Subst.empty
   where
     go [] = pure ()
@@ -60,7 +60,7 @@ solveConstraint ::
   ( MonadError TypeError m,
     MonadLogger m,
     HasKindEnv m,
-    MonadState Unifier m
+    MonadState (Subst UniVar) m
   ) =>
   Constraint ->
   m [Constraint]
@@ -88,7 +88,7 @@ unifyUniVarWithLogging ::
   ( MonadError TypeError m,
     MonadLogger m,
     HasKindEnv m,
-    MonadState Unifier m
+    MonadState (Subst UniVar) m
   ) =>
   UniVar ->
   Kind UniVar ->
@@ -106,7 +106,7 @@ unifyUniVar ::
   ( MonadError TypeError m,
     MonadLogger m,
     HasKindEnv m,
-    MonadState Unifier m
+    MonadState (Subst UniVar) m
   ) =>
   UniVar ->
   Kind UniVar ->
@@ -129,7 +129,7 @@ unifyUniVars ::
   ( MonadError TypeError m,
     MonadLogger m,
     HasKindEnv m,
-    MonadState Unifier m
+    MonadState (Subst UniVar) m
   ) =>
   UniVar ->
   Kind UniVar ->
@@ -150,7 +150,7 @@ unifyUniVarWithoutKind ::
   ( MonadError TypeError m,
     MonadLogger m,
     HasKindEnv m,
-    MonadState Unifier m
+    MonadState (Subst UniVar) m
   ) =>
   UniVar ->
   Monotype UniVar ->
