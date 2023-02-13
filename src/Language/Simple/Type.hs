@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
 
 module Language.Simple.Type
   ( typeExpr,
@@ -9,10 +8,12 @@ module Language.Simple.Type
   )
 where
 
+import Control.Monad (forM)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, logInfoN)
 import Control.Monad.Writer (MonadWriter (..), listen, runWriterT)
-import Data.Foldable (foldrM)
+import Data.Foldable (foldlM, foldrM)
+import qualified Data.HashMap.Strict as HashMap (singleton)
 import qualified Data.HashSet as HashSet (difference, member)
 import qualified Data.Vector as Vector (fromList, zip)
 import Fresh (Fresh (..), runFreshT)
@@ -21,7 +22,7 @@ import Language.Simple.Type.Constraint (Constraint (..))
 import Language.Simple.Type.Env (HasKindEnv (..), HasTypeEnv (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Unifier)
-import qualified Language.Simple.Type.Subst as Subst (compose, empty, fromBinders, lookup, singleton, substitute)
+import qualified Language.Simple.Type.Subst as Subst (compose, empty, lookup, singleton, substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
 import Util (orThrow, orThrowM, showPretty)
 
@@ -57,13 +58,30 @@ generateConstraints (LetExpr x e1 e2) = do
   s <- withUnifier u $ generalize (Subst.substitute u t1)
   logInfoN $ showPretty x <> " :: " <> showPretty s
   withTermVar x s $ generateConstraints e2
-generateConstraints (RecordExpr _) = error "unimplemented"
-generateConstraints (UpdateExpr _ _) = error "unimplemented"
-generateConstraints (MemberExpr _ _) = error "unimplemented"
+generateConstraints (RecordExpr fs) = do
+  fs' <- traverse generateConstraints fs
+  pure $ RecordType fs'
+generateConstraints (UpdateExpr fs e) = do
+  t <- generateConstraints e
+  fs' <- forM fs $ \e2 -> do
+    t2 <- generateConstraints e2
+    a <- UniType <$> newUniVar TypeKind
+    tell [EqualityConstraint a t2]
+    pure a
+  a <- UniType <$> newUniVar (RecordKind fs')
+  tell [EqualityConstraint a t]
+  pure a
+generateConstraints (MemberExpr e l) = do
+  t <- generateConstraints e
+  a1 <- UniType <$> newUniVar TypeKind
+  a2 <- UniType <$> newUniVar (RecordKind $ HashMap.singleton l a1)
+  tell [EqualityConstraint a2 t]
+  pure a1
 
 generalize ::
   ( Fresh m,
     MonadLogger m,
+    HasKindEnv m,
     HasTypeEnv m
   ) =>
   Monotype UniVar ->
@@ -71,13 +89,15 @@ generalize ::
 generalize t = do
   as <- HashSet.difference (fuv t) <$> envFuv
   (s, vs) <- foldrM go (Subst.empty, []) as
-  let vs' = fmap (,TypeKind) vs -- TODO: use kinds
+  let vs' = fmap (f s) vs
   pure ForallTypeScheme {vars = Vector.fromList vs', monotype = Subst.substitute s t}
   where
     go a (s, vs) = do
       v <- fresh
       let s' = Subst.singleton a (VarType v)
-      pure (Subst.compose s s', v : vs)
+      k <- getUniVarKind a
+      pure (Subst.compose s s', (v, k) : vs)
+    f s (v, k) = (v, Subst.substitute s k)
 
 type Instantiator = Subst TypeVar
 
@@ -89,13 +109,20 @@ instantiateMonotype _ (UniType v) = pure $ UniType v
 
 instantiateTypeScheme ::
   ( Fresh m,
-    MonadError TypeError m
+    MonadError TypeError m,
+    HasKindEnv m
   ) =>
   TypeScheme UniVar ->
   m (Monotype UniVar)
 instantiateTypeScheme ForallTypeScheme {vars, monotype} = do
-  s <- Subst.fromBinders $ fmap fst vars -- TODO: use kinds
+  s <- foldlM go Subst.empty vars
+  substKindEnv s
   instantiateMonotype s monotype
+  where
+    go s (v, k) = do
+      a <- newUniVar k
+      let s' = Subst.singleton v (UniType a)
+      pure $ Subst.compose s' s
 
 solveConstraints :: (MonadError TypeError m, MonadLogger m) => [Constraint] -> m Unifier
 solveConstraints = foldrM go Subst.empty

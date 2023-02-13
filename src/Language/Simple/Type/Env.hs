@@ -17,7 +17,7 @@ import Control.Exception (throw)
 import Control.Monad.Except (MonadError)
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Reader (ReaderT (..), asks, local, runReaderT)
-import Control.Monad.State (StateT (..), evalStateT, gets, state)
+import Control.Monad.State (StateT (..), evalStateT, gets, modify, state)
 import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT (..), mapWriterT)
 import Data.HashMap.Strict (HashMap)
@@ -34,7 +34,7 @@ import Language.Simple.Syntax
     TypeScheme (..),
   )
 import Language.Simple.Type.Error (TypeException (..))
-import Language.Simple.Type.Subst (Unifier)
+import Language.Simple.Type.Subst (Subst, Substitutable, Unifier)
 import qualified Language.Simple.Type.Subst as Subst (substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
 
