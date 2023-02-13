@@ -15,17 +15,26 @@ import Control.Monad.Writer (MonadWriter (..), listen, runWriterT)
 import Data.Foldable (foldrM)
 import qualified Data.HashSet as HashSet (difference, member)
 import qualified Data.Vector as Vector (fromList, zip)
-import Fresh (Fresh (..))
+import Fresh (Fresh (..), runFreshT)
 import Language.Simple.Syntax (Expr (..), Kind (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
 import Language.Simple.Type.Constraint (Constraint (..))
-import Language.Simple.Type.Env (HasTypeEnv (..), runEnvT, withLocalVar)
+import Language.Simple.Type.Env (HasKindEnv (..), HasTypeEnv (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Unifier)
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, fromBinders, lookup, singleton, substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
 import Util (orThrow, orThrowM, showPretty)
 
-generateConstraints :: (HasTypeEnv m, Fresh m, MonadWriter [Constraint] m, MonadLogger m, MonadError TypeError m) => Expr -> m (Monotype UniVar)
+generateConstraints ::
+  ( HasTypeEnv m,
+    HasKindEnv m,
+    Fresh m,
+    MonadWriter [Constraint] m,
+    MonadLogger m,
+    MonadError TypeError m
+  ) =>
+  Expr ->
+  m (Monotype UniVar)
 generateConstraints (CtorExpr k) = do
   s <- lookupDataCtor k `orThrowM` UnboundDataCtor k
   instantiateTypeScheme s
@@ -33,13 +42,13 @@ generateConstraints (VarExpr x) = do
   s <- lookupTermVar x `orThrowM` UnboundTermVar x
   instantiateTypeScheme s
 generateConstraints (LambdaExpr x e) = do
-  a <- UniType <$> fresh
+  a <- UniType <$> newUniVar TypeKind
   t <- withLocalVar x a $ generateConstraints e
   pure $ functionType a t
 generateConstraints (ApplyExpr e1 e2) = do
   t1 <- generateConstraints e1
   t2 <- generateConstraints e2
-  a <- UniType <$> fresh
+  a <- UniType <$> newUniVar TypeKind
   tell [EqualityConstraint t1 (functionType t2 a)]
   pure a
 generateConstraints (LetExpr x e1 e2) = do
@@ -52,7 +61,13 @@ generateConstraints (RecordExpr _) = error "unimplemented"
 generateConstraints (UpdateExpr _ _) = error "unimplemented"
 generateConstraints (MemberExpr _ _) = error "unimplemented"
 
-generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
+generalize ::
+  ( Fresh m,
+    MonadLogger m,
+    HasTypeEnv m
+  ) =>
+  Monotype UniVar ->
+  m (TypeScheme UniVar)
 generalize t = do
   as <- HashSet.difference (fuv t) <$> envFuv
   (s, vs) <- foldrM go (Subst.empty, []) as
@@ -107,7 +122,7 @@ solveConstraints = foldrM go Subst.empty
         f (x, y) = EqualityConstraint x y
 
 typeExpr :: (MonadError TypeError m, MonadLogger m) => Expr -> m ()
-typeExpr e = do
+typeExpr e = runFreshT $ do
   (t, cs) <- runEnvT mempty . runWriterT $ generateConstraints e
   s <- solveConstraints cs
   logInfoN . showPretty $ Subst.substitute s t

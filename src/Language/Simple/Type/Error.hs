@@ -2,9 +2,11 @@
 
 module Language.Simple.Type.Error
   ( TypeError (..),
+    TypeException (..),
   )
 where
 
+import Control.Exception (Exception)
 import GHC.Generics (Generic)
 import Language.Simple.Syntax (DataCtor, Monotype, TermVar, TypeVar)
 import Language.Simple.Type.UniVar (UniVar)
@@ -16,3 +18,9 @@ data TypeError
   | MismatchedType (Monotype UniVar) (Monotype UniVar)
   | OccurCheck (Monotype UniVar) (Monotype UniVar)
   deriving (Generic, Show)
+
+newtype TypeException
+  = UniVarWithoutKindException UniVar
+  deriving (Generic, Show)
+
+instance Exception TypeException
