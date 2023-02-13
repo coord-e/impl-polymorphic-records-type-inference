@@ -8,7 +8,7 @@ where
 
 import Control.Exception (Exception)
 import GHC.Generics (Generic)
-import Language.Simple.Syntax (DataCtor, Monotype, TermVar, TypeVar)
+import Language.Simple.Syntax (DataCtor, Kind, Monotype, TermVar, TypeVar)
 import Language.Simple.Type.UniVar (UniVar)
 
 data TypeError
@@ -16,6 +16,7 @@ data TypeError
   | UnboundTypeVar TypeVar
   | UnboundDataCtor DataCtor
   | MismatchedType (Monotype UniVar) (Monotype UniVar)
+  | MismatchedKind UniVar (Kind UniVar) (Kind UniVar)
   | OccurCheck (Monotype UniVar) (Monotype UniVar)
   deriving (Generic, Show)
 

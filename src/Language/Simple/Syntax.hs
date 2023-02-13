@@ -162,7 +162,7 @@ data Monotype a
     RecordType (HashMap Label (Monotype a))
   | -- | Unification type variable. \( \alpha \)
     UniType a
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 type RigidMonotype = Monotype Void
 
