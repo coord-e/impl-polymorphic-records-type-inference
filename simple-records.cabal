@@ -23,10 +23,11 @@ library
 
     hs-source-dirs:   src
     other-modules:
-        Language.Simple.Type.Subst
         Language.Simple.Type.Constraint
         Language.Simple.Type.Env
         Language.Simple.Type.Error
+        Language.Simple.Type.Subst
+        Language.Simple.Type.UniVar
         Util
         Fresh
 

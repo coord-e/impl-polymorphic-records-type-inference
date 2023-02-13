@@ -1,0 +1,3 @@
+let gety = \r. r.y in
+let xtoy = \r. { y = r.x } in
+gety (xtoy { x = 1 })

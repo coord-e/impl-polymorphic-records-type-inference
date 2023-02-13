@@ -14,17 +14,14 @@ module Language.Simple.Type.Subst
     empty,
     member,
     singleton,
-    fromBinders,
     Unifier,
     Substitutable (..),
   )
 where
 
-import Data.Foldable (foldlM)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
   ( empty,
-    insert,
     intersection,
     keysSet,
     lookup,
@@ -37,9 +34,8 @@ import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet (toMap)
 import Data.Hashable (Hashable)
-import Fresh (Fresh (..))
-import Language.Simple.Syntax (Monotype (..), TypeScheme (..), TypeVar)
-import Language.Simple.Type.Constraint (UniVar)
+import Language.Simple.Syntax (Kind (..), Monotype (..), TypeScheme (..), TypeVar)
+import Language.Simple.Type.UniVar (UniVar)
 import Prettyprinter (Pretty (..), list, (<+>))
 import Util (fromJustOr)
 import Prelude hiding (lookup, null)
@@ -90,19 +86,22 @@ class Substitutable a b where
 instance Substitutable UniVar (Monotype UniVar) where
   substitute _ (VarType v) = VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
+  substitute s (RecordType fs) = RecordType $ fmap (substitute s) fs
   substitute (Subst s) (UniType u) = HashMap.lookup u s `fromJustOr` UniType u
 
 instance Substitutable UniVar (TypeScheme UniVar) where
   substitute s ForallTypeScheme {vars, monotype} = ForallTypeScheme {vars, monotype = substitute s monotype}
 
+instance Substitutable UniVar (Kind UniVar) where
+  substitute _ TypeKind = TypeKind
+  substitute s (RecordKind fs) = RecordKind $ fmap (substitute s) fs
+
 instance Substitutable TypeVar (Monotype UniVar) where
   substitute (Subst s) (VarType v) = HashMap.lookup v s `fromJustOr` VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
+  substitute s (RecordType fs) = RecordType $ fmap (substitute s) fs
   substitute _ (UniType v) = UniType v
 
-fromBinders :: (Eq a, Hashable a, Fresh m, Foldable f) => f a -> m (Subst a)
-fromBinders = foldlM go empty
-  where
-    go (Subst subst) v = do
-      a <- fresh
-      pure . Subst $ HashMap.insert v (UniType a) subst
+instance Substitutable TypeVar (Kind UniVar) where
+  substitute _ TypeKind = TypeKind
+  substitute s (RecordKind fs) = RecordKind $ fmap (substitute s) fs

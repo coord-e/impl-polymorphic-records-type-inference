@@ -21,19 +21,27 @@ import Control.Monad (MonadPlus (..))
 import Control.Monad.Except (MonadError (..))
 import Data.Attoparsec.Text (parseOnly)
 import Data.Foldable (foldl')
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap (fromList)
+import Data.Hashable (Hashable)
 import Data.Text (Text, pack)
 import Language.Simple.Syntax
   ( DataCtor (..),
     Expr (..),
+    Label (..),
     TermVar (..),
   )
 import Text.Parser.Char (CharParsing (..), alphaNum, lower, text, upper)
 import Text.Parser.Combinators
   ( Parsing (..),
     choice,
+    optional,
+    sepEndBy,
   )
 import Text.Parser.Token
   ( TokenParsing (..),
+    braces,
+    comma,
     dot,
     integer,
     parens,
@@ -67,12 +75,16 @@ instance TokenParsing m => TokenParsing (Comment m) where
   highlight h (Comment p) = Comment $ highlight h p
 
 exprParser :: TokenParsing m => m Expr
-exprParser = foldl' ApplyExpr <$> atom <*> many atom <?> "expression"
+exprParser = foldl' ApplyExpr <$> memberExprParser <*> many memberExprParser <?> "expression"
+
+memberExprParser :: TokenParsing m => m Expr
+memberExprParser = foldl' MemberExpr <$> atom <*> many (dot *> labelParser)
   where
     atom =
       parens exprParser
         <|> lambda
         <|> let_
+        <|> record
         <|> CtorExpr <$> dataCtorParser
         <|> VarExpr <$> termVarParser
     lambda = textSymbol "\\" *> (LambdaExpr <$> (termVarParser <* dot) <*> exprParser)
@@ -81,6 +93,16 @@ exprParser = foldl' ApplyExpr <$> atom <*> many atom <?> "expression"
         <$> (keyword "let" *> termVarParser)
         <*> (textSymbol "=" *> exprParser)
         <*> (keyword "in" *> exprParser)
+    record =
+      braces
+        ( f
+            <$> commaSepEndHM ((,) <$> (labelParser <* textSymbol "=") <*> exprParser)
+            <*> optional (textSymbol ".." *> exprParser)
+        )
+    f fields = maybe (RecordExpr fields) (UpdateExpr fields)
+
+labelParser :: TokenParsing m => m Label
+labelParser = Label <$> lowerName <?> "label"
 
 termVarParser :: TokenParsing m => m TermVar
 termVarParser = TermVar <$> lowerName <?> "variable"
@@ -108,3 +130,6 @@ anyKeyword = choice (map keyword keywords)
 
 keyword :: TokenParsing m => Text -> m Text
 keyword x = token . try $ text x <* notFollowedBy alphaNum
+
+commaSepEndHM :: (Eq a, Hashable a, TokenParsing m) => m (a, b) -> m (HashMap a b)
+commaSepEndHM p = HashMap.fromList <$> sepEndBy p comma
