@@ -1,0 +1,4 @@
+let f = \x.
+  let g = \y. { x = x } in
+  (g 1).x.y
+in f { y = 1 }

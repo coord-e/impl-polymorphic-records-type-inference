@@ -1,0 +1,5 @@
+let getx = \r. r.x in
+let p = \x. \y. x in
+let r1 = { y = True } in
+let r2 = { x = False, y = 2 } in
+p (getx r1) (getx r2)
