@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.Simple.Type
   ( typeExpr,
@@ -12,7 +13,6 @@ import Control.Monad.Logger (MonadLogger, logInfoN)
 import Control.Monad.Writer (MonadWriter (..), listen, runWriterT)
 import Data.Foldable (foldrM)
 import qualified Data.HashSet as HashSet (difference, member)
-import Data.Text (pack)
 import qualified Data.Vector as Vector (fromList, zip)
 import Fresh (Fresh (..))
 import Language.Simple.Syntax (Expr (..), Monotype (..), TypeScheme (..), TypeVar, functionType)
@@ -21,7 +21,7 @@ import Language.Simple.Type.Env (HasTypeEnv (..), runEnvT, withLocalVar)
 import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Unifier)
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, fromBinders, lookup, singleton, substitute)
-import Util (orThrow, orThrowM)
+import Util (orThrow, orThrowM, showPretty)
 
 generateConstraints :: (HasTypeEnv m, Fresh m, MonadWriter [Constraint] m, MonadLogger m, MonadError TypeError m) => Expr -> m (Monotype UniVar)
 generateConstraints (CtorExpr k) = do
@@ -44,6 +44,7 @@ generateConstraints (LetExpr x e1 e2) = do
   (t1, cs) <- listen $ generateConstraints e1
   u <- solveConstraints cs
   s <- withUnifier u $ generalize (Subst.substitute u t1)
+  logInfoN $ showPretty x <> " :: " <> showPretty s
   withTermVar x s $ generateConstraints e2
 
 generalize :: (Fresh m, MonadLogger m, HasTypeEnv m) => Monotype UniVar -> m (TypeScheme UniVar)
@@ -78,9 +79,13 @@ solveConstraints :: (MonadError TypeError m, MonadLogger m) => [Constraint] -> m
 solveConstraints = foldrM go Subst.empty
   where
     go (EqualityConstraint t1 t2) s1 = do
-      logInfoN . pack $ show t1 <> " ~ " <> show t2
-      s2 <- unify (Subst.substitute s1 t1) (Subst.substitute s1 t2)
+      s2 <- unifyLog (Subst.substitute s1 t1) (Subst.substitute s1 t2)
       pure $ Subst.compose s2 s1
+    unifyLog t1 t2 = do
+      logInfoN $ "unify: " <> showPretty (EqualityConstraint t1 t2)
+      s <- unify t1 t2
+      logInfoN $ "got: " <> showPretty s
+      pure s
     unify (VarType v1) (VarType v2) | v1 == v2 = pure Subst.empty
     unify (UniType u) t = unifyVar u t
     unify t (UniType u) = unifyVar u t
@@ -98,5 +103,5 @@ typeExpr :: (MonadError TypeError m, MonadLogger m) => Expr -> m ()
 typeExpr e = do
   (t, cs) <- runEnvT mempty . runWriterT $ generateConstraints e
   s <- solveConstraints cs
-  logInfoN . pack . show $ Subst.substitute s t
+  logInfoN . showPretty $ Subst.substitute s t
   pure ()

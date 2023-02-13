@@ -2,7 +2,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Simple.Syntax
   ( -- * Expressions
@@ -23,10 +25,12 @@ where
 import Data.Hashable (Hashable)
 import Data.Text (Text, pack)
 import Data.Vector (Vector)
-import qualified Data.Vector as Vector (fromList)
+import qualified Data.Vector as Vector (fromList, toList)
 import Data.Void (Void)
 import Fresh (GenFresh (..))
 import GHC.Generics (Generic)
+import Prettyprinter (Doc, Pretty (..), group, hsep, line, nest, parens, space, (<+>))
+import Prettyprinter.Internal (unsafeTextWithoutNewlines)
 
 -- | Expression.
 data Expr
@@ -42,11 +46,41 @@ data Expr
     LetExpr TermVar Expr Expr
   deriving stock (Show, Generic)
 
+instance Pretty Expr where
+  pretty (CtorExpr k) = pretty k
+  pretty (VarExpr x) = pretty x
+  pretty (LambdaExpr x e) = group ("\\" <> pretty x <> "." <> nest 2 (line <> pretty e))
+  pretty (ApplyExpr e1 e2) = nested e1 <+> prettyAtomExpr e2
+    where
+      nested t@(ApplyExpr {}) = pretty t
+      nested t@(CtorExpr {}) = pretty t
+      nested t@(VarExpr {}) = pretty t
+      nested t = parens (pretty t)
+  pretty (LetExpr x e1 e2) =
+    group
+      ( "let"
+          <+> pretty x
+          <+> "="
+            <> nest 2 (line <> pretty e1)
+            <> line
+            <> "in"
+          <+> pretty e2
+      )
+
+prettyAtomExpr :: Expr -> Doc ann
+prettyAtomExpr t@(LambdaExpr {}) = parens (pretty t)
+prettyAtomExpr t@(ApplyExpr {}) = parens (pretty t)
+prettyAtomExpr t@(LetExpr {}) = parens (pretty t)
+prettyAtomExpr t = pretty t
+
 -- | Term-level variable.
 newtype TermVar = TermVar Text
   deriving stock (Ord, Eq, Generic)
   deriving newtype (Show)
   deriving anyclass (Hashable)
+
+instance Pretty TermVar where
+  pretty (TermVar x) = unsafeTextWithoutNewlines x
 
 -- | Data constructor.
 data DataCtor
@@ -54,6 +88,10 @@ data DataCtor
   | IntegerDataCtor Integer
   deriving stock (Show, Ord, Eq, Generic)
   deriving anyclass (Hashable)
+
+instance Pretty DataCtor where
+  pretty (NamedDataCtor k) = unsafeTextWithoutNewlines k
+  pretty (IntegerDataCtor i) = pretty i
 
 -- | Type scheme that contains unification variable as @a@.
 data TypeScheme a = ForallTypeScheme
@@ -63,6 +101,13 @@ data TypeScheme a = ForallTypeScheme
     monotype :: Monotype a
   }
   deriving (Generic)
+
+instance Pretty a => Pretty (TypeScheme a) where
+  pretty ForallTypeScheme {vars, monotype} = quant <> pretty monotype
+    where
+      quant
+        | null vars = mempty
+        | otherwise = "forall" <+> hsep (map pretty (Vector.toList vars)) <> "." <> space
 
 -- | Monotype that contains unification variable as @a@.
 data Monotype a
@@ -79,12 +124,31 @@ type RigidMonotype = Monotype Void
 functionType :: Monotype a -> Monotype a -> Monotype a
 functionType a b = ApplyType FunctionTypeCtor $ Vector.fromList [a, b]
 
+instance Pretty a => Pretty (Monotype a) where
+  pretty (VarType v) = pretty v
+  pretty (UniType a) = pretty a
+  pretty (ApplyType FunctionTypeCtor (Vector.toList -> [a, b]))
+    | isNested a = parens (pretty a) <+> "->" <+> pretty b
+    | otherwise = pretty a <+> "->" <+> pretty b
+    where
+      isNested (ApplyType FunctionTypeCtor _) = True
+      isNested _ = False
+  pretty (ApplyType k ts) = hsep (pretty k : map prettyAtomMonotype (Vector.toList ts))
+
+prettyAtomMonotype :: Pretty a => Monotype a -> Doc ann
+prettyAtomMonotype t@(ApplyType _ ts') | not (null ts') = parens (pretty t)
+prettyAtomMonotype t = pretty t
+
 -- | Type constructor.
 data TypeCtor
   = NamedTypeCtor Text
   | FunctionTypeCtor
   deriving stock (Show, Ord, Eq, Generic)
   deriving anyclass (Hashable)
+
+instance Pretty TypeCtor where
+  pretty (NamedTypeCtor k) = unsafeTextWithoutNewlines k
+  pretty FunctionTypeCtor = "(->)"
 
 -- | Type-level variable.
 newtype TypeVar = TypeVar Text
@@ -94,3 +158,6 @@ newtype TypeVar = TypeVar Text
 
 instance GenFresh TypeVar where
   fromFreshNatural n = TypeVar $ "a" <> pack (show n)
+
+instance Pretty TypeVar where
+  pretty (TypeVar v) = unsafeTextWithoutNewlines v

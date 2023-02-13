@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.Simple.Type.Subst
   ( Subst (..),
@@ -30,6 +31,7 @@ import qualified Data.HashMap.Strict as HashMap
     member,
     null,
     singleton,
+    toList,
     union,
   )
 import Data.HashSet (HashSet)
@@ -38,10 +40,16 @@ import Data.Hashable (Hashable)
 import Fresh (Fresh (..))
 import Language.Simple.Syntax (Monotype (..), TypeScheme (..), TypeVar)
 import Language.Simple.Type.Constraint (UniVar)
+import Prettyprinter (Pretty (..), list, (<+>))
 import Util (fromJustOr)
 import Prelude hiding (lookup, null)
 
 newtype Subst a = Subst (HashMap a (Monotype UniVar))
+
+instance Pretty a => Pretty (Subst a) where
+  pretty (Subst m) = list . map f $ HashMap.toList m
+    where
+      f (k, v) = pretty k <+> "↦" <+> pretty v
 
 type Unifier = Subst UniVar
 
