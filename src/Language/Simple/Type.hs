@@ -10,7 +10,7 @@ where
 
 import Control.Monad (forM)
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Logger (MonadLogger, logInfoN)
+import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Writer (MonadWriter (..), listen, runWriterT)
 import Data.Foldable (foldlM, foldrM)
 import qualified Data.HashMap.Strict as HashMap (singleton)
@@ -24,7 +24,8 @@ import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst)
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, lookup, singleton, substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
-import Util (orThrow, orThrowM, showPretty)
+import Prettyprinter (pretty, (<+>))
+import Util (logInfoDoc, orThrow, orThrowM)
 
 generateConstraints ::
   ( HasTypeEnv m,
@@ -56,7 +57,7 @@ generateConstraints (LetExpr x e1 e2) = do
   (t1, cs) <- listen $ generateConstraints e1
   u <- solveConstraints cs
   s <- withSubst u $ generalize (Subst.substitute u t1)
-  logInfoN $ showPretty x <> " :: " <> showPretty s
+  logInfoDoc $ pretty x <+> "::" <+> pretty s
   withTermVar x s $ generateConstraints e2
 generateConstraints (RecordExpr fs) = do
   fs' <- traverse generateConstraints fs
@@ -130,5 +131,5 @@ typeExpr e = runFreshT $ do
     (t, cs) <- runWriterT $ generateConstraints e
     s <- solveConstraints cs
     pure $ Subst.substitute s t
-  logInfoN $ showPretty t
+  logInfoDoc $ pretty t
   pure ()

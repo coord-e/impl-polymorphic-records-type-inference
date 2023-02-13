@@ -2,13 +2,13 @@ module Util
   ( orThrow,
     orThrowM,
     fromJustOr,
-    showPretty,
+    logInfoDoc,
   )
 where
 
 import Control.Monad.Except (MonadError (..))
-import Data.Text (Text)
-import Prettyprinter (Pretty, defaultLayoutOptions, layoutPretty, pretty)
+import Control.Monad.Logger (MonadLogger, logInfoN)
+import Prettyprinter (Doc, defaultLayoutOptions, layoutPretty)
 import Prettyprinter.Render.Text (renderStrict)
 
 orThrow :: MonadError e m => Maybe a -> e -> m a
@@ -24,5 +24,5 @@ fromJustOr :: Maybe a -> a -> a
 fromJustOr (Just x) _ = x
 fromJustOr Nothing x = x
 
-showPretty :: Pretty a => a -> Text
-showPretty = renderStrict . layoutPretty defaultLayoutOptions . pretty
+logInfoDoc :: MonadLogger m => Doc ann -> m ()
+logInfoDoc = logInfoN . renderStrict . layoutPretty defaultLayoutOptions

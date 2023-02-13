@@ -10,7 +10,7 @@ module Language.Simple.Type.Constraint
 where
 
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Logger (MonadLogger, logInfoN)
+import Control.Monad.Logger (MonadLogger)
 import Control.Monad.State (MonadState, execStateT, get, modify)
 import qualified Data.HashMap.Strict as HashMap
   ( difference,
@@ -28,8 +28,8 @@ import Language.Simple.Type.Error (TypeError (..))
 import Language.Simple.Type.Subst (Subst, Substitutable (..))
 import qualified Language.Simple.Type.Subst as Subst (compose, empty, singleton, substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
-import Prettyprinter (Pretty (..), (<+>))
-import Util (showPretty)
+import Prettyprinter (Pretty (..), group, (<+>))
+import Util (logInfoDoc)
 
 data Constraint = EqualityConstraint (Monotype UniVar) (Monotype UniVar)
   deriving (Generic)
@@ -52,7 +52,7 @@ solveConstraints cs = execStateT (go cs) Subst.empty
     go [] = pure ()
     go (h : t) = do
       cs' <- solveConstraint h
-      logInfoN $ showPretty h <> " => " <> showPretty cs'
+      logInfoDoc $ pretty h <+> "=>" <+> group (pretty cs')
       s <- get
       go $ fmap (Subst.substitute s) (cs' ++ t)
 
@@ -96,10 +96,10 @@ unifyUniVarWithLogging ::
   m [Constraint]
 unifyUniVarWithLogging u1 k1 t2@(UniType u2) = do
   k2 <- getUniVarKind u2
-  logInfoN $ showPretty u1 <> "::" <> showPretty k1 <> " ~ " <> showPretty u2 <> "::" <> showPretty k2
+  logInfoDoc $ pretty u1 <> "::" <> pretty k1 <+> "~" <+> pretty u2 <> "::" <> pretty k2
   unifyUniVar u1 k1 t2
 unifyUniVarWithLogging u1 k1 t2 = do
-  logInfoN $ showPretty u1 <> "::" <> showPretty k1 <> " ~ " <> showPretty t2
+  logInfoDoc $ pretty u1 <> "::" <> pretty k1 <+> "~" <+> pretty t2
   unifyUniVar u1 k1 t2
 
 unifyUniVar ::
@@ -161,6 +161,6 @@ unifyUniVarWithoutKind u t
   | otherwise = do
       modify $ Subst.compose s
       substKindEnv s
-      logInfoN $ showPretty s
+      logInfoDoc $ pretty s
   where
     s = Subst.singleton u t
