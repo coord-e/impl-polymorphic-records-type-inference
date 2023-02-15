@@ -1,6 +1,6 @@
 # Toy implementation of type inference for polymorphic record calculus
 
-This repository contains a toy implementation of type inference for polymorphic record calculus[[1]](#1). The [`main`](https://github.com/coord-e/impl-polymorphic-records-type-inference/tree/main) branch uses the kinded unification described in [[1]](#1). The [`record-constraints`](https://github.com/coord-e/impl-polymorphic-records-type-inference/tree/record-constraints) branch, on the other hand, implements a solver for record-related constraints separately from unification.
+This repository contains a toy implementation of type inference for polymorphic record calculus[[1]](#1). The [`main`](https://github.com/coord-e/impl-polymorphic-records-type-inference/tree/main) branch uses the kinded unification described in [[1]](#1). The [`record-constraints`](https://github.com/coord-e/impl-polymorphic-records-type-inference/tree/record-constraints) branch, on the other hand, implements a solver for record-related constraints separately from unification. It also simplifies the implementation by expressing constraints on records as type constraints, not as kinds.
 
 ## Bibliography
 

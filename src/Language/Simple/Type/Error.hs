@@ -7,8 +7,9 @@ module Language.Simple.Type.Error
 where
 
 import Control.Exception (Exception)
+import Data.HashMap.Strict (HashMap)
 import GHC.Generics (Generic)
-import Language.Simple.Syntax (DataCtor, Kind, Monotype, TermVar, TypeVar)
+import Language.Simple.Syntax (DataCtor, Label, Monotype, RecordConstraint, TermVar, TypeVar)
 import Language.Simple.Type.UniVar (UniVar)
 
 data TypeError
@@ -16,12 +17,13 @@ data TypeError
   | UnboundTypeVar TypeVar
   | UnboundDataCtor DataCtor
   | MismatchedType (Monotype UniVar) (Monotype UniVar)
-  | MismatchedKind UniVar (Kind UniVar) (Kind UniVar)
+  | MismatchedRecord (HashMap Label (Monotype UniVar)) (Monotype UniVar)
   | OccurCheck (Monotype UniVar) (Monotype UniVar)
   deriving (Generic, Show)
 
-newtype TypeException
-  = UniVarWithoutKindException UniVar
+data TypeException
+  = FreeUniVarInConstraintException (RecordConstraint UniVar UniVar)
+  | FreeTypeVarInConstraintException (RecordConstraint TypeVar UniVar)
   deriving (Generic, Show)
 
 instance Exception TypeException

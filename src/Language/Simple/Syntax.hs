@@ -14,6 +14,7 @@ module Language.Simple.Syntax
 
     -- * Types
     TypeScheme (..),
+    monoTypeScheme,
     Monotype (..),
     RigidMonotype,
     functionType,
@@ -22,7 +23,7 @@ module Language.Simple.Syntax
 
     -- * Others
     Label (..),
-    Kind (..),
+    RecordConstraint (..),
   )
 where
 
@@ -135,22 +136,42 @@ instance Pretty DataCtor where
   pretty (NamedDataCtor k) = unsafeTextWithoutNewlines k
   pretty (IntegerDataCtor i) = pretty i
 
+-- | Record constraint about @a@ that contains unification variable as @b@.
+data RecordConstraint a b = HashMap Label (Monotype b) :<: a
+  deriving (Generic, Show)
+
+instance (Pretty a, Pretty b) => Pretty (RecordConstraint a b) where
+  pretty (fs :<: a) = prettyRecordType fs <+> "⊆" <+> pretty a
+
 -- | Type scheme that contains unification variable as @a@.
 data TypeScheme a = ForallTypeScheme
   { -- | Type variables to be quantified.
-    vars :: Vector (TypeVar, Kind a),
+    vars :: Vector TypeVar,
+    -- | Record constraints on the type variables.
+    constraints :: Vector (RecordConstraint TypeVar a),
     -- | The type.
     monotype :: Monotype a
   }
   deriving (Generic)
 
 instance Pretty a => Pretty (TypeScheme a) where
-  pretty ForallTypeScheme {vars, monotype} = quant <> pretty monotype
+  pretty ForallTypeScheme {vars, constraints, monotype} = quant <> qual <> pretty monotype
     where
       quant
         | null vars = mempty
-        | otherwise = "∀" <+> hsep (map var (Vector.toList vars)) <> "." <> space
-      var (v, k) = pretty v <> "::" <> pretty k
+        | otherwise =
+            "∀"
+              <> hsep (punctuate "," . map pretty $ Vector.toList vars)
+              <> "."
+              <> space
+      qual
+        | null constraints = mempty
+        | otherwise =
+            hsep (punctuate ", " . map pretty $ Vector.toList constraints)
+              <+> "=>" <> space
+
+monoTypeScheme :: Monotype a -> TypeScheme a
+monoTypeScheme t = ForallTypeScheme {vars = mempty, constraints = mempty, monotype = t}
 
 -- | Monotype that contains unification variable as @a@.
 data Monotype a
@@ -162,7 +183,7 @@ data Monotype a
     RecordType (HashMap Label (Monotype a))
   | -- | Unification type variable. \( \alpha \)
     UniType a
-  deriving (Generic, Show, Eq)
+  deriving (Generic, Show, Eq, Ord)
 
 type RigidMonotype = Monotype Void
 
@@ -179,10 +200,13 @@ instance Pretty a => Pretty (Monotype a) where
       isNested (ApplyType FunctionTypeCtor _) = True
       isNested _ = False
   pretty (ApplyType k ts) = hsep (pretty k : map prettyAtomMonotype (Vector.toList ts))
-  pretty (RecordType fs) = group ("{" <> nest 2 (line <> vsep fs') <> line <> "}")
-    where
-      fs' = punctuate ", " (f <$> HashMap.toList fs)
-      f (l, t) = pretty l <+> ":" <+> pretty t
+  pretty (RecordType fs) = prettyRecordType fs
+
+prettyRecordType :: Pretty a => HashMap Label (Monotype a) -> Doc ann
+prettyRecordType fs = group ("{" <> nest 2 (line <> vsep fs') <> line <> "}")
+  where
+    fs' = punctuate ", " (f <$> HashMap.toList fs)
+    f (l, t) = pretty l <+> ":" <+> pretty t
 
 prettyAtomMonotype :: Pretty a => Monotype a -> Doc ann
 prettyAtomMonotype t@(ApplyType _ ts') | not (null ts') = parens (pretty t)
@@ -210,18 +234,3 @@ instance GenFresh TypeVar where
 
 instance Pretty TypeVar where
   pretty (TypeVar v) = unsafeTextWithoutNewlines v
-
--- | Kind of types that contains unification variable as @a@.
-data Kind a
-  = -- | Types. \( U \)
-    TypeKind
-  | -- | Records. \( \{\!\{ \bar{l \texttt{:} \tau} \}\!\} \)
-    RecordKind (HashMap Label (Monotype a))
-  deriving (Generic, Show)
-
-instance Pretty a => Pretty (Kind a) where
-  pretty TypeKind = "U"
-  pretty (RecordKind fs) = group ("{{" <> nest 2 (line <> vsep fs') <> line <> "}}")
-    where
-      fs' = punctuate ", " (f <$> HashMap.toList fs)
-      f (l, t) = pretty l <+> ":" <+> pretty t

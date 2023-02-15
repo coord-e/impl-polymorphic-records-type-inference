@@ -33,7 +33,7 @@ import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet (toMap)
 import Data.Hashable (Hashable)
-import Language.Simple.Syntax (Kind (..), Monotype (..), TypeScheme (..), TypeVar)
+import Language.Simple.Syntax (Monotype (..), RecordConstraint (..), TypeScheme (..), TypeVar)
 import Language.Simple.Type.UniVar (UniVar)
 import Prettyprinter (Pretty (..), list, (<+>))
 import Util (fromJustOr)
@@ -87,18 +87,21 @@ instance Substitutable UniVar (Monotype UniVar) where
   substitute (Subst s) (UniType u) = HashMap.lookup u s `fromJustOr` UniType u
 
 instance Substitutable UniVar (TypeScheme UniVar) where
-  substitute s ForallTypeScheme {vars, monotype} = ForallTypeScheme {vars, monotype = substitute s monotype}
+  substitute s ForallTypeScheme {vars, constraints, monotype} =
+    ForallTypeScheme
+      { vars,
+        constraints = fmap (substitute s) constraints,
+        monotype = substitute s monotype
+      }
 
-instance Substitutable UniVar (Kind UniVar) where
-  substitute _ TypeKind = TypeKind
-  substitute s (RecordKind fs) = RecordKind $ fmap (substitute s) fs
+instance Substitutable UniVar (RecordConstraint TypeVar UniVar) where
+  substitute s (fs :<: v) = fmap (substitute s) fs :<: v
+
+instance Substitutable UniVar (RecordConstraint (Monotype UniVar) UniVar) where
+  substitute s (fs :<: t) = fmap (substitute s) fs :<: substitute s t
 
 instance Substitutable TypeVar (Monotype UniVar) where
   substitute (Subst s) (VarType v) = HashMap.lookup v s `fromJustOr` VarType v
   substitute s (ApplyType k ts) = ApplyType k $ fmap (substitute s) ts
   substitute s (RecordType fs) = RecordType $ fmap (substitute s) fs
   substitute _ (UniType v) = UniType v
-
-instance Substitutable TypeVar (Kind UniVar) where
-  substitute _ TypeKind = TypeKind
-  substitute s (RecordKind fs) = RecordKind $ fmap (substitute s) fs

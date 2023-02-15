@@ -8,32 +8,27 @@ module Language.Simple.Type.Env
   ( EnvT,
     runEnvT,
     HasTypeEnv (..),
-    HasKindEnv (..),
     withLocalVar,
   )
 where
 
-import Control.Exception (throw)
 import Control.Monad.Except (MonadError)
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Reader (ReaderT (..), asks, local, runReaderT)
-import Control.Monad.State (StateT (..), evalStateT, gets, modify, state)
 import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT (..), mapWriterT)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap (insert, lookup, member)
+import qualified Data.HashMap.Strict as HashMap (insert, lookup)
 import Data.HashSet (HashSet)
-import Data.Maybe (fromMaybe)
 import Fresh (Fresh (..))
 import Language.Simple.Syntax
   ( DataCtor (..),
-    Kind,
     Monotype (..),
     TermVar,
     TypeCtor (..),
     TypeScheme (..),
+    monoTypeScheme,
   )
-import Language.Simple.Type.Error (TypeException (..))
 import Language.Simple.Type.Subst (Subst, Substitutable)
 import qualified Language.Simple.Type.Subst as Subst (substitute)
 import Language.Simple.Type.UniVar (UniVar, fuv)
@@ -46,23 +41,13 @@ class Monad m => HasTypeEnv m where
   withSubst :: Substitutable a (TypeScheme UniVar) => Subst a -> m b -> m b
 
 withLocalVar :: HasTypeEnv m => TermVar -> Monotype UniVar -> m a -> m a
-withLocalVar v t = withTermVar v ForallTypeScheme {vars = mempty, monotype = t}
-
-class Monad m => HasKindEnv m where
-  getUniVarKind :: UniVar -> m (Kind UniVar)
-  setUniVarKind :: UniVar -> Kind UniVar -> m ()
-  newUniVar :: Kind UniVar -> m UniVar
-  substKindEnv :: Substitutable a (Kind UniVar) => Subst a -> m ()
+withLocalVar v t = withTermVar v $ monoTypeScheme t
 
 newtype TypeEnv = TypeEnv
   { termVars :: HashMap TermVar (TypeScheme UniVar)
   }
 
-newtype KindEnv = KindEnv
-  { uniVars :: HashMap UniVar (Kind UniVar)
-  }
-
-newtype EnvT m a = MkEnvT (ReaderT TypeEnv (StateT KindEnv m) a)
+newtype EnvT m a = MkEnvT (ReaderT TypeEnv m a)
   deriving newtype (Functor, Applicative, Monad, MonadError e, MonadLogger, Fresh)
 
 instance Monad m => HasTypeEnv (EnvT m) where
@@ -70,9 +55,9 @@ instance Monad m => HasTypeEnv (EnvT m) where
   withTermVar x s (MkEnvT a) = MkEnvT $ local f a
     where
       f e@TypeEnv {termVars} = e {termVars = HashMap.insert x s termVars}
-  lookupDataCtor (NamedDataCtor "True") = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Bool") mempty}
-  lookupDataCtor (NamedDataCtor "False") = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Bool") mempty}
-  lookupDataCtor (IntegerDataCtor _) = pure $ Just ForallTypeScheme {vars = mempty, monotype = ApplyType (NamedTypeCtor "Int") mempty}
+  lookupDataCtor (NamedDataCtor "True") = pure . Just . monoTypeScheme $ ApplyType (NamedTypeCtor "Bool") mempty
+  lookupDataCtor (NamedDataCtor "False") = pure . Just . monoTypeScheme $ ApplyType (NamedTypeCtor "Bool") mempty
+  lookupDataCtor (IntegerDataCtor _) = pure . Just . monoTypeScheme $ ApplyType (NamedTypeCtor "Int") mempty
   lookupDataCtor _ = pure Nothing
   envFuv = MkEnvT $ asks (foldMap (fuv . monotype) . termVars)
   withSubst u (MkEnvT a) = MkEnvT $ local f a
@@ -86,45 +71,11 @@ instance (Monoid w, HasTypeEnv m) => HasTypeEnv (WriterT w m) where
   envFuv = lift envFuv
   withSubst u = mapWriterT (withSubst u)
 
-instance (Fresh m, Monad m) => HasKindEnv (EnvT m) where
-  getUniVarKind u = MkEnvT . gets $ f . HashMap.lookup u . uniVars
-    where
-      f = fromMaybe (throw $ UniVarWithoutKindException u)
-  setUniVarKind u k = MkEnvT $ modify f
-    where
-      f KindEnv {uniVars}
-        | HashMap.member u uniVars = KindEnv {uniVars = HashMap.insert u k uniVars}
-        | otherwise = throw $ UniVarWithoutKindException u
-  newUniVar k = MkEnvT $ fresh >>= state . f
-    where
-      f u KindEnv {uniVars} =
-        ( u,
-          KindEnv
-            { uniVars = HashMap.insert u k uniVars
-            }
-        )
-  substKindEnv s = MkEnvT $ modify f
-    where
-      f KindEnv {uniVars} = KindEnv {uniVars = fmap (Subst.substitute s) uniVars}
-
-instance (Monoid w, HasKindEnv m) => HasKindEnv (WriterT w m) where
-  getUniVarKind u = lift $ getUniVarKind u
-  setUniVarKind u k = lift $ setUniVarKind u k
-  newUniVar k = lift $ newUniVar k
-  substKindEnv s = lift $ substKindEnv s
-
-instance HasKindEnv m => HasKindEnv (StateT s m) where
-  getUniVarKind u = lift $ getUniVarKind u
-  setUniVarKind u k = lift $ setUniVarKind u k
-  newUniVar k = lift $ newUniVar k
-  substKindEnv s = lift $ substKindEnv s
-
 runEnvT ::
   Monad m =>
   HashMap TermVar (TypeScheme UniVar) ->
   EnvT m a ->
   m a
-runEnvT termVars (MkEnvT a) = evalStateT (runReaderT a initTypeEnv) initKindEnv
+runEnvT termVars (MkEnvT a) = runReaderT a initTypeEnv
   where
     initTypeEnv = TypeEnv {termVars}
-    initKindEnv = KindEnv {uniVars = mempty}
