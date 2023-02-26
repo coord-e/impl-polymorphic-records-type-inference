@@ -5,14 +5,17 @@ license:            BSD-3-Clause
 license-file:       LICENSE
 maintainer:         me@coord-e.com
 author:             coord_e
-bug-reports:        https://github.com/coord-e/simple-records/issues
+bug-reports:
+    https://github.com/coord-e/impl-polymorphic-records-type-inference/issues
+
 synopsis:           Toy implementation of type inference with records
 description:        Toy implementation of type inference with records.
 extra-source-files: CHANGELOG.md
 
 source-repository head
     type:     git
-    location: https://github.com/coord-e/simple-records
+    location:
+        https://github.com/coord-e/impl-polymorphic-records-type-inference
 
 library
     exposed-modules:
